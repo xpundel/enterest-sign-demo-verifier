@@ -1,0 +1,5 @@
+*
+!go.mod
+!*.go
+!native/
+!native/cades_verify.c

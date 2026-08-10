@@ -1,0 +1,19 @@
+# syntax=docker/dockerfile:1
+
+FROM ubuntu:22.04
+
+COPY linux-amd64_deb /tmp/csp
+WORKDIR /tmp/csp
+
+RUN chmod +x install.sh && \
+    ./install.sh kc1 --yes lsb-cprocsp-devel cprocsp-pki-cades && \
+    test -f /opt/cprocsp/include/pki/cades.h && \
+    test -f /opt/cprocsp/lib/amd64/libcades.so && \
+    rm -rf /tmp/csp
+
+RUN --mount=type=secret,id=cryptopro_license \
+    if [ -s /run/secrets/cryptopro_license ]; then \
+      /opt/cprocsp/sbin/amd64/cpconfig -license -set "$(tr -d '\r\n' </run/secrets/cryptopro_license)"; \
+    fi
+
+WORKDIR /
