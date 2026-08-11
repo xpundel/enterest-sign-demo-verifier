@@ -1,6 +1,10 @@
 # syntax=docker/dockerfile:1
 
-FROM ubuntu:22.04
+FROM ubuntu:22.04@sha256:3b06811b2afd352be909dd088a004166d665dc76d38b13eada33522a9d915c6f
+
+ARG CRYPTOPRO_ARCHIVE_SHA256
+LABEL verifier.cryptopro.version="5.0.13003" \
+      verifier.cryptopro.archive-sha256="${CRYPTOPRO_ARCHIVE_SHA256}"
 
 COPY linux-amd64_deb /tmp/csp
 WORKDIR /tmp/csp

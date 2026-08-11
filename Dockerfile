@@ -23,7 +23,7 @@ RUN --mount=type=bind,from=test-ca,source=/cryptopro-test-center-2.crt,target=/t
     fi
 LABEL verifier.cryptopro-test-ca-included="${INCLUDE_TEST_CA}"
 
-FROM golang:1.26-bookworm AS build
+FROM golang:1.26-bookworm@sha256:53eeac89074db483fdf0ab3be1df32bf6e47562263d2d0d6baa7f26acb4957dd AS build
 WORKDIR /src
 COPY --from=cryptopro /opt/cprocsp /opt/cprocsp
 COPY go.mod *.go ./
