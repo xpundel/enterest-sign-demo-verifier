@@ -126,6 +126,21 @@ func (app application) handleReady(w http.ResponseWriter, _ *http.Request) {
 func (app application) handleVerify(w http.ResponseWriter, r *http.Request) {
 	started := time.Now()
 	requestID := newRequestID()
+	parentRequestID := r.Header.Get("X-Parent-Request-ID")
+	status, code, engineCode, signerCount := http.StatusInternalServerError, "INTERNAL_ERROR", "", 0
+	valid := false
+	defer func() {
+		app.logger.Info("signature verification request completed",
+			"request_id", requestID,
+			"parent_request_id", parentRequestID,
+			"status", status,
+			"valid", valid,
+			"code", code,
+			"engine_code", engineCode,
+			"signer_count", signerCount,
+			"duration_ms", time.Since(started).Milliseconds(),
+		)
+	}()
 	w.Header().Set("X-Request-ID", requestID)
 	r.Body = http.MaxBytesReader(w, r.Body, app.maxDocumentBytes+app.maxSignatureBytes+(1<<20))
 
@@ -138,14 +153,23 @@ func (app application) handleVerify(w http.ResponseWriter, r *http.Request) {
 
 	documentPath, signaturePath, err := readMultipartFiles(r, tempDir, app.maxDocumentBytes, app.maxSignatureBytes)
 	if err != nil {
+		status, code = http.StatusBadRequest, "INVALID_INPUT"
 		writeAPIError(w, http.StatusBadRequest, requestID, "INVALID_INPUT")
 		return
 	}
+	documentInfo, _ := os.Stat(documentPath)
+	signatureInfo, _ := os.Stat(signaturePath)
+	app.logger.Info("signature verification started",
+		"request_id", requestID,
+		"parent_request_id", parentRequestID,
+		"document_bytes", documentInfo.Size(),
+		"signature_bytes", signatureInfo.Size(),
+	)
 
 	result := app.verify(r.Context(), documentPath, signaturePath)
-	status := http.StatusOK
+	status = http.StatusOK
 	decision := "rejected"
-	code := "SIGNATURE_INVALID"
+	code = "SIGNATURE_INVALID"
 	if result.valid {
 		decision = "indeterminate"
 		code = "VALID"
@@ -172,15 +196,7 @@ func (app application) handleVerify(w http.ResponseWriter, r *http.Request) {
 		Engine:        "cryptopro-cades",
 		EngineCode:    result.code,
 	})
-	app.logger.Info("signature verification finished",
-		"request_id", requestID,
-		"valid", result.valid,
-		"decision", decision,
-		"code", code,
-		"engine_code", result.code,
-		"signer_count", len(result.signers),
-		"duration_ms", time.Since(started).Milliseconds(),
-	)
+	valid, engineCode, signerCount = result.valid, result.code, len(result.signers)
 }
 
 func readMultipartFiles(r *http.Request, tempDir string, maxDocumentBytes, maxSignatureBytes int64) (string, string, error) {
@@ -324,7 +340,7 @@ func main() {
 		_ = server.Shutdown(shutdownCtx)
 	}()
 
-	logger.Info("signature verifier started", "listen_addr", listenAddr, "engine", "cryptopro-cades")
+	logger.Info("signature verifier started", "listen_addr", listenAddr, "engine", "cryptopro-cades", "verify_timeout", verifier.timeout)
 	if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		logger.Error("signature verifier stopped", "error", err)
 		os.Exit(1)
