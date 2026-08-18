@@ -115,6 +115,13 @@ func TestCertificateStatusIsCheckedAtCurrentTime(t *testing.T) {
 	}
 }
 
+func TestLastHelperStageIgnoresUnstructuredOutput(t *testing.T) {
+	output := "certificate data that must not be logged\nstage=cms_parsed signer_count=1\nstage=verify_started signer_index=0\n"
+	if got := lastHelperStage(output); got != "stage=verify_started signer_index=0" {
+		t.Fatalf("unexpected helper stage: %q", got)
+	}
+}
+
 func testCertificate(t *testing.T, now time.Time, usage x509.KeyUsage) []byte {
 	t.Helper()
 	key, err := rsa.GenerateKey(rand.Reader, 2048)

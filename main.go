@@ -167,6 +167,14 @@ func (app application) handleVerify(w http.ResponseWriter, r *http.Request) {
 	)
 
 	result := app.verify(r.Context(), documentPath, signaturePath)
+	if result.diagnostic != "" {
+		app.logger.Warn("signature verification helper diagnostic",
+			"request_id", requestID,
+			"parent_request_id", parentRequestID,
+			"engine_code", result.code,
+			"helper_stage", result.diagnostic,
+		)
+	}
 	status = http.StatusOK
 	decision := "rejected"
 	code = "SIGNATURE_INVALID"

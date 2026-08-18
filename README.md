@@ -49,6 +49,8 @@ curl -sS http://localhost:8080/v1/signatures/verify \
 
 Невалидная подпись возвращается с HTTP 200 и `decision: rejected`. Некорректный multipart получает 400, недоступный helper — 503, timeout — 504. Лимиты: документ 25 MiB, подпись 5 MiB, максимум 32 подписанта.
 
+При ошибке helper verifier пишет отдельную JSON-запись `signature verification helper diagnostic` с теми же `request_id` и `parent_request_id`. Поле `helper_stage` показывает последний безопасный этап без содержимого документа, подписи и сертификата. `stage=verify_started` при последующем timeout означает зависание внутри `CadesVerifyDetachedMessage`; проверьте цепочку доверия и доступ контейнера к CRL/OCSP/AIA сертификата.
+
 ## Разработка
 
 ```bash

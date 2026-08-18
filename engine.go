@@ -20,6 +20,7 @@ type engineResult struct {
 	code        string
 	unavailable bool
 	timedOut    bool
+	diagnostic  string
 	checks      checkResults
 	signers     []signerResponse
 }
@@ -36,11 +37,14 @@ func (v cadesVerifier) verify(ctx context.Context, documentPath, signaturePath s
 	cmd := exec.CommandContext(ctx, v.path, documentPath, signaturePath)
 	cmd.Env = append(os.Environ(), "LANG=C.UTF-8", "LC_ALL=C.UTF-8")
 	output := &limitedBuffer{limit: maxHelperOutputBytes}
+	diagnostics := &limitedBuffer{limit: 4096}
 	cmd.Stdout = output
-	cmd.Stderr = &limitedBuffer{limit: maxHelperOutputBytes}
+	cmd.Stderr = diagnostics
 	err := cmd.Run()
 	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-		return operationalFailure("VERIFICATION_TIMEOUT", false, true)
+		result := operationalFailure("VERIFICATION_TIMEOUT", false, true)
+		result.diagnostic = lastHelperStage(diagnostics.String())
+		return result
 	}
 	var execError *exec.Error
 	var pathError *os.PathError
@@ -48,7 +52,9 @@ func (v cadesVerifier) verify(ctx context.Context, documentPath, signaturePath s
 		return operationalFailure("VERIFIER_UNAVAILABLE", true, false)
 	}
 	if err != nil {
-		return operationalFailure("CADES_HELPER_FAILED", true, false)
+		result := operationalFailure("CADES_HELPER_FAILED", true, false)
+		result.diagnostic = lastHelperStage(diagnostics.String())
+		return result
 	}
 
 	result, parseErr := parseHelperOutput(output.String(), time.Now())
@@ -56,6 +62,17 @@ func (v cadesVerifier) verify(ctx context.Context, documentPath, signaturePath s
 		return operationalFailure("CADES_PROTOCOL_ERROR", true, false)
 	}
 	return result
+}
+
+func lastHelperStage(output string) string {
+	lines := strings.Split(strings.TrimSpace(output), "\n")
+	for index := len(lines) - 1; index >= 0; index-- {
+		line := strings.TrimSpace(lines[index])
+		if strings.HasPrefix(line, "stage=") {
+			return line
+		}
+	}
+	return ""
 }
 
 func parseHelperOutput(output string, now time.Time) (engineResult, error) {

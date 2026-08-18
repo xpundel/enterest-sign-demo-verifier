@@ -7,6 +7,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+static void trace_stage(const char *stage) {
+    fprintf(stderr, "stage=%s\n", stage);
+    fflush(stderr);
+}
+
 static int read_file(const char *path, BYTE **data, DWORD *size) {
     FILE *file = fopen(path, "rb");
     long length;
@@ -93,10 +98,13 @@ int main(int argc, char **argv) {
         exit_code = 2;
         goto cleanup;
     }
+    trace_stage("input_read");
     if (!signer_count(signature, signature_size, &count) || count == 0 || count > 32) {
         printf("E\tCMS_PARSE_FAILED\t0x%08x\n", (unsigned int)GetLastError());
         goto cleanup;
     }
+    fprintf(stderr, "stage=cms_parsed signer_count=%u\n", (unsigned int)count);
+    fflush(stderr);
 
     printf("V\t1\t%u\n", (unsigned int)count);
     for (index = 0; index < count; index++) {
@@ -118,6 +126,8 @@ int main(int argc, char **argv) {
         parameters.pVerifyMessagePara = &crypt;
         parameters.pCadesVerifyPara = &cades;
 
+        fprintf(stderr, "stage=verify_started signer_index=%u\n", (unsigned int)index);
+        fflush(stderr);
         SetLastError(0);
         api_ok = CadesVerifyDetachedMessage(
             &parameters,
@@ -132,6 +142,15 @@ int main(int argc, char **argv) {
         error_code = GetLastError();
         status = info != NULL ? info->dwStatus : 0xffffffffU;
 		if (api_ok && status == CADES_VERIFY_SUCCESS) error_code = 0;
+        fprintf(
+            stderr,
+            "stage=verify_finished signer_index=%u api_ok=%d status=%s error=0x%08x\n",
+            (unsigned int)index,
+            api_ok ? 1 : 0,
+            status_name(status),
+            (unsigned int)error_code
+        );
+        fflush(stderr);
 
         printf(
             "S\t%u\t%d\t%s\t0x%08x\t%lld\t%lld\t",
