@@ -17,11 +17,22 @@ ADD --checksum=sha256:8f217cb5a025647364c00d60ff77444e7cdb7005b26f264f056b9a6611
 
 FROM cryptopro AS cryptopro-runtime
 ARG INCLUDE_TEST_CA=true
+ARG ENABLE_CRYPTOPRO_TRACE=false
 RUN --mount=type=bind,from=test-ca,source=/cryptopro-test-center-2.crt,target=/tmp/cryptopro-test-center-2.crt \
     if [ "$INCLUDE_TEST_CA" = "true" ]; then \
       /opt/cprocsp/bin/amd64/certmgr -install -store mRoot -file /tmp/cryptopro-test-center-2.crt; \
     fi
-LABEL verifier.cryptopro-test-ca-included="${INCLUDE_TEST_CA}"
+RUN if [ "$ENABLE_CRYPTOPRO_TRACE" = "true" ]; then \
+      /opt/cprocsp/sbin/amd64/cpconfig -loglevel cades -mask 0xF && \
+      /opt/cprocsp/sbin/amd64/cpconfig -loglevel cades_fmt -mask 0x39 && \
+      /opt/cprocsp/sbin/amd64/cpconfig -loglevel ocsp -mask 0xF && \
+      /opt/cprocsp/sbin/amd64/cpconfig -loglevel ocsp_fmt -mask 0x39; \
+    else \
+      /opt/cprocsp/sbin/amd64/cpconfig -loglevel cades -mask 0x1 && \
+      /opt/cprocsp/sbin/amd64/cpconfig -loglevel ocsp -mask 0x1; \
+    fi
+LABEL verifier.cryptopro-test-ca-included="${INCLUDE_TEST_CA}" \
+      verifier.cryptopro-trace-enabled="${ENABLE_CRYPTOPRO_TRACE}"
 
 FROM golang:1.26-bookworm@sha256:53eeac89074db483fdf0ab3be1df32bf6e47562263d2d0d6baa7f26acb4957dd AS build
 WORKDIR /src

@@ -17,6 +17,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 )
@@ -119,6 +120,17 @@ func TestLastHelperStageIgnoresUnstructuredOutput(t *testing.T) {
 	output := "certificate data that must not be logged\nstage=cms_parsed signer_count=1\nstage=verify_started signer_index=0\n"
 	if got := lastHelperStage(output); got != "stage=verify_started signer_index=0" {
 		t.Fatalf("unexpected helper stage: %q", got)
+	}
+}
+
+func TestVerifierRecordsHelperProcessID(t *testing.T) {
+	helper := filepath.Join(t.TempDir(), "helper.sh")
+	if err := os.WriteFile(helper, []byte("#!/bin/sh\nprintf 'E\\tCMS_PARSE_FAILED\\t0x00000000\\n'\n"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	result := (cadesVerifier{path: helper, timeout: time.Second}).verify(t.Context(), "document", "signature")
+	if result.helperPID <= 0 || result.code != "CMS_PARSE_FAILED" {
+		t.Fatalf("unexpected helper result: %+v", result)
 	}
 }
 

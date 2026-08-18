@@ -21,6 +21,7 @@ type engineResult struct {
 	unavailable bool
 	timedOut    bool
 	diagnostic  string
+	helperPID   int
 	checks      checkResults
 	signers     []signerResponse
 }
@@ -40,27 +41,34 @@ func (v cadesVerifier) verify(ctx context.Context, documentPath, signaturePath s
 	diagnostics := &limitedBuffer{limit: 4096}
 	cmd.Stdout = output
 	cmd.Stderr = diagnostics
-	err := cmd.Run()
+	if err := cmd.Start(); err != nil {
+		var execError *exec.Error
+		var pathError *os.PathError
+		if errors.As(err, &execError) || errors.As(err, &pathError) {
+			return operationalFailure("VERIFIER_UNAVAILABLE", true, false)
+		}
+		return operationalFailure("CADES_HELPER_FAILED", true, false)
+	}
+	helperPID := cmd.Process.Pid
+	err := cmd.Wait()
 	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 		result := operationalFailure("VERIFICATION_TIMEOUT", false, true)
 		result.diagnostic = lastHelperStage(diagnostics.String())
+		result.helperPID = helperPID
 		return result
-	}
-	var execError *exec.Error
-	var pathError *os.PathError
-	if errors.As(err, &execError) || errors.As(err, &pathError) {
-		return operationalFailure("VERIFIER_UNAVAILABLE", true, false)
 	}
 	if err != nil {
 		result := operationalFailure("CADES_HELPER_FAILED", true, false)
 		result.diagnostic = lastHelperStage(diagnostics.String())
+		result.helperPID = helperPID
 		return result
 	}
 
 	result, parseErr := parseHelperOutput(output.String(), time.Now())
 	if parseErr != nil {
-		return operationalFailure("CADES_PROTOCOL_ERROR", true, false)
+		result = operationalFailure("CADES_PROTOCOL_ERROR", true, false)
 	}
+	result.helperPID = helperPID
 	return result
 }
 

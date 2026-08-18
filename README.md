@@ -51,6 +51,8 @@ curl -sS http://localhost:8080/v1/signatures/verify \
 
 При ошибке helper verifier пишет отдельную JSON-запись `signature verification helper diagnostic` с теми же `request_id` и `parent_request_id`. Поле `helper_stage` показывает последний безопасный этап без содержимого документа, подписи и сертификата. `stage=verify_started` при последующем timeout означает зависание внутри `CadesVerifyDetachedMessage`; проверьте цепочку доверия и доступ контейнера к CRL/OCSP/AIA сертификата.
 
+Поле `helper_pid` в итоговой JSON-записи позволяет сопоставить запрос со строками системной трассировки CryptoPro вида `cades-verify[PID]`. Для staging трассировка `cades`/`ocsp` включается build argument `ENABLE_CRYPTOPRO_TRACE=true`; CryptoPro отправляет её в syslog через `/dev/log`. Настройка внешнего файла и ротации описана в infrastructure README. Трассировка может содержать сведения о сертификатах и сетевых адресах, поэтому в production оставляйте флаг выключенным.
+
 ## Разработка
 
 ```bash

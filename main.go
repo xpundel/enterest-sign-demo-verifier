@@ -127,7 +127,7 @@ func (app application) handleVerify(w http.ResponseWriter, r *http.Request) {
 	started := time.Now()
 	requestID := newRequestID()
 	parentRequestID := r.Header.Get("X-Parent-Request-ID")
-	status, code, engineCode, signerCount := http.StatusInternalServerError, "INTERNAL_ERROR", "", 0
+	status, code, engineCode, signerCount, helperPID := http.StatusInternalServerError, "INTERNAL_ERROR", "", 0, 0
 	valid := false
 	defer func() {
 		app.logger.Info("signature verification request completed",
@@ -137,6 +137,7 @@ func (app application) handleVerify(w http.ResponseWriter, r *http.Request) {
 			"valid", valid,
 			"code", code,
 			"engine_code", engineCode,
+			"helper_pid", helperPID,
 			"signer_count", signerCount,
 			"duration_ms", time.Since(started).Milliseconds(),
 		)
@@ -167,11 +168,13 @@ func (app application) handleVerify(w http.ResponseWriter, r *http.Request) {
 	)
 
 	result := app.verify(r.Context(), documentPath, signaturePath)
+	helperPID = result.helperPID
 	if result.diagnostic != "" {
 		app.logger.Warn("signature verification helper diagnostic",
 			"request_id", requestID,
 			"parent_request_id", parentRequestID,
 			"engine_code", result.code,
+			"helper_pid", result.helperPID,
 			"helper_stage", result.diagnostic,
 		)
 	}
